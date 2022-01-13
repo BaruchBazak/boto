@@ -4,15 +4,21 @@ import json_oparations
 
 
 def describe():
-    client = boto3.client('ec2', region_name='us-west-2')
+    client = boto3.client('ec2', region)
     response = client.describe_instances()
     for i in response['Reservations']:
         for out in i["Instances"]:
             if out['State']['Name'] == "running":
                 print("ID : {0}, State : {1}, IP : {2}".format(out['InstanceId'], out['State']['Name'],
                                                                out['PublicIpAddress']))
+                if out['InstanceId'] not in ec2_data["ec2_instance_ids"]:
+                    ec2_data["ec2_instance_ids"].append(out['InstanceId'])
+                    json_oparations.saveJsonFata("./ec2_data.json", ec2_data)
             else:
                 print("ID : {0}, State : {1}".format(out['InstanceId'], out['State']['Name']))
+                if out['InstanceId'] not in ec2_data["ec2_instance_ids"]:
+                    ec2_data["ec2_instance_ids"].append(out['InstanceId'])
+                    json_oparations.saveJsonFata("./ec2_data.json", ec2_data)
     print("\n")
 
 
@@ -33,8 +39,23 @@ def create_instances():
         json_oparations.saveJsonFata("./ec2_data.json", ec2_data)
 
 
+def start_instances():
+    ec2 = boto3.resource("ec2", region)
+    try:
+        num_instances = int(input("Enter how many instances you want start ? : "))
+    except ValueError as e:
+        print(e, "\nOnly numbers !")
+        num_instances = int(input("Enter how many instances you want start ? : "))
+    ids = []
+    for i in range(num_instances):
+        instance = input("instance id : ")
+        ids.append(instance)
+    ec2.instances.filter(InstanceIds=ids).stop()
+    print("Instances {0} started\n".format(ids))
+
+
 def stop_instances():
-    ec2 = boto3.resource("ec2", region_name='us-west-2')
+    ec2 = boto3.resource("ec2", region)
     try:
         num_instances = int(input("Enter how many instances you want stop ? : "))
     except ValueError as e:
@@ -57,8 +78,19 @@ def print_all_id():
     print("\n")
 
 
+def terminate_by_id():
+    ec2 = boto3.resource("ec2", region)
+    instance = input("Enter the id off machine you want to terminate : ")
+    ids = [instance]
+    ec2.instances.filter(InstanceIds=ids).terminate()
+    print("{0} terminated.".format(ids))
+    for i in ids:
+        if i in ec2_data["ec2_instance_ids"]:
+            ec2_data["ec2_instance_ids"].remove(i)
+
+
 def terminate_all():
-    ec2 = boto3.resource('ec2', region_name='us-west-2')
+    ec2 = boto3.resource('ec2', region)
     for instance_id in ec2_data["ec2_instance_ids"]:
         instance = ec2.Instance(instance_id)
         print(instance)
@@ -76,34 +108,38 @@ def terminate_all():
 
 def main():
     while True:
-        print("Boto3 menu : \n----------------\n1.Create instance(s)\n"
-              "2.Print all instances ID\n3.Terminate all instances\n"
-              "4.Stop instances\n5.Describe instances\n6.Exit\n")
+        print("Boto3 menu : \n----------------\n1.Deploy instance(s)\n"
+              "2.Start instances by ID\n3.Stop instances by ID\n"
+              "4.Terminate instance\n5.Describe instances\n6.Terminate all instances\n7.Exit")
         choice = input("Enter number 1-6 : ")
         if choice == "1":
-            print("\nCreate Instances\n-----------------")
+            print("\nDeploy Instances\n-----------------")
             num_instances = int(input("How many instances you want to deploy ? : ")) + 1
             for i in range(1, num_instances):
                 print("Deploy instance {0}".format(i))
                 create_instances()
-                print("Instance {0} running".format(i))
+                print("Instance {0} pending".format(i))
             print("done\n")
         elif choice == "2":
-            print("\nPrint All Ids\n---------------")  # Ids from ec2_data.config
-            print_all_id()
+            print("\nStart instance\n---------------")  # Ids from ec2_data.config
+            start_instances()
         elif choice == "3":
-            print("\nTerminate All Instances\n-------------------")  # Ids from ec2_data.config
-            terminate_all()
-        elif choice == "4":
-            print("\nStop All Instances\n------------------")
+            print("\nStop Instances\n-------------------")  # Ids from ec2_data.config
             stop_instances()
+        elif choice == "4":
+            print("\nTerminate Instance\n------------------")
+            terminate_by_id()
         elif choice == "5":
-            print("\nDescribe All instances\n--------------------")  # 12/01/22 Describe only : ID, State and PublicIP
+            print("\nDescribe All instances in region - {0}"
+                  "\n--------------------".format(region))  # 12/01/22 Describe only : ID, State and PublicIP
             describe()
         elif choice == "6":
+            print("\nTerminate all Instances\n------------------")
+            terminate_all()
+        elif choice == "7":
             break
         else:
-            print("Only 1-4")
+            print("Only 1-7")
 
 
 config_data = json_oparations.loadJsonData("./config.json")
@@ -113,7 +149,9 @@ MinCount = config_data["MinCount"]
 MaxCount = config_data["MaxCount"]
 InstanceType = config_data["InstanceType"]
 ec2_data = json_oparations.loadJsonData(ec2_json_data_path)
-ec2_client = boto3.client("ec2", region_name="us-west-2")
+region = config_data["Region"]
+
+ec2_client = boto3.client("ec2", region_name=region)
 
 
 if __name__ == '__main__':
