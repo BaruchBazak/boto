@@ -1,4 +1,4 @@
-Menu for interact with AWS EC2 service.
+Menu for interact with AWS EC2 service.<br>
 prerequests:
 1.python
 2.AWS CLI
